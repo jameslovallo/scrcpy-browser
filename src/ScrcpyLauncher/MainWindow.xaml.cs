@@ -935,13 +935,11 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Android density calibrated to the host window's DPI scaling (e.g. 150% yields 180 dpi).
-    /// scrcpy's flex display is sized in physical pixels.
+    /// Calibrated Android density for the launcher's content size across common host display settings.
     /// </summary>
     private int GetDisplayDpi()
     {
-        var scale = HostArea.XamlRoot?.RasterizationScale ?? 1.0;
-        return (int)Math.Round(Math.Clamp(120 * scale, 96, 480));
+        return 180;
     }
 
     /// <summary>Host area bounds in physical pixels, relative to the window client area.</summary>

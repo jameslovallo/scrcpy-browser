@@ -319,7 +319,10 @@
                         Click="AudioCaptureButton_Click"
                         Style="{StaticResource SubtleButtonStyle}"
                         ToolTipService.ToolTip="Enable device audio capture">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                        <StackPanel
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="6">
                             <FontIcon
                                 x:Name="AudioCaptureIcon"
                                 FontSize="16"

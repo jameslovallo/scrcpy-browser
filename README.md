@@ -97,7 +97,7 @@ scrcpy --serial=<id> --new-display=/<dpi> -x --no-vd-system-decorations --window
        -K --mouse-bind=+hbn:bhsn --no-audio
 ```
 
-- No display size is passed; only the density (`/<dpi>`), computed from the window's DPI scaling (`120 × RasterizationScale`, e.g. 180 for 150%). The launcher sizes the scrcpy *window*, and with `-x` the virtual display follows it, so Android content keeps its logical size on high-DPI screens.
+- No display size is passed; the launcher uses a calibrated density of 180 dpi. The launcher sizes the scrcpy *window*, and with `-x` the virtual display follows it, so Android content keeps its logical size on high-DPI screens.
 - The window starts off-screen. The launcher finds it by its unique title, re-parents it into the main view (`SetParent`, `WS_CHILD`), and keeps it sized to that view. A one-time window region (`SetWindowRgn`) rounds all four corners to match the view card. It's rebuilt only when the size changes, so there's no per-frame cost.
 - `--no-vd-system-decorations` hides the Android status and navigation bars.
 - `-K` uses UHID keyboard input (physical keyboard simulation). Apps with **Capture mouse** enabled also get `-M` (UHID mouse; scrcpy captures the pointer until Alt is pressed).
