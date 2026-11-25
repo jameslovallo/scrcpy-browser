@@ -295,44 +295,34 @@
                     IsClosable="True"
                     IsOpen="False" />
 
-                <!--  Footer: settings (left), audio capture (center), and Android Back (right)  -->
+                <!--  Footer: settings and audio (left), and Android Back (right)  -->
                 <Grid Grid.Row="5">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Button
-                        x:Name="SettingsButton"
-                        HorizontalAlignment="Left"
-                        AutomationProperties.Name="Settings"
-                        Click="SettingsButton_Click"
-                        Style="{StaticResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Settings">
-                        <FontIcon FontSize="16" Glyph="&#xE713;" />
-                    </Button>
-                    <Button
-                        x:Name="AudioCaptureButton"
-                        Grid.Column="1"
-                        HorizontalAlignment="Center"
-                        AutomationProperties.Name="Device audio capture"
-                        Click="AudioCaptureButton_Click"
-                        Style="{StaticResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Enable device audio capture">
-                        <StackPanel
-                            VerticalAlignment="Center"
-                            Orientation="Horizontal"
-                            Spacing="6">
+                    <StackPanel Orientation="Horizontal">
+                        <Button
+                            x:Name="SettingsButton"
+                            AutomationProperties.Name="Settings"
+                            Click="SettingsButton_Click"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="Settings">
+                            <FontIcon FontSize="16" Glyph="&#xE713;" />
+                        </Button>
+                        <Button
+                            x:Name="AudioCaptureButton"
+                            AutomationProperties.Name="Device audio capture"
+                            Click="AudioCaptureButton_Click"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="Enable device audio capture">
                             <FontIcon
                                 x:Name="AudioCaptureIcon"
                                 FontSize="16"
                                 Glyph="&#xE74F;" />
-                            <TextBlock
-                                x:Name="AudioCaptureText"
-                                VerticalAlignment="Center"
-                                Text="Audio off" />
-                        </StackPanel>
-                    </Button>
+                        </Button>
+                    </StackPanel>
                     <Button
                         x:Name="BackButton"
                         Grid.Column="2"
@@ -401,6 +391,7 @@
                     <ScrollViewer x:Name="SettingsView" Visibility="Collapsed">
                         <StackPanel
                             MaxWidth="1000"
+                            HorizontalAlignment="Center"
                             Padding="36,24,36,36"
                             Spacing="4">
                             <TextBlock

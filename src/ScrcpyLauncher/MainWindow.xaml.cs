@@ -64,7 +64,7 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = new MicaBackdrop();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
         AppWindow.Resize(new SizeInt32(1400, 900));
@@ -366,7 +366,6 @@ public sealed partial class MainWindow : Window
         var isCapturing = _audioSession?.IsRunning == true;
         var hasDevice = _device is { IsReady: true } && _deviceService.ScrcpyPath is not null;
         AudioCaptureIcon.Glyph = isCapturing ? "\uE767" : "\uE74F";
-        AudioCaptureText.Text = isCapturing ? "Audio on" : "Audio off";
         AudioCaptureButton.IsEnabled = hasDevice;
         var action = isCapturing ? "Disable" : "Enable";
         var description = hasDevice ? $"{action} device audio capture" : "Connect a device to capture audio";
