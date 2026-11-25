@@ -891,7 +891,10 @@ public sealed partial class MainWindow : Window
             Placeholder.Visibility = Visibility.Collapsed;
             LaunchProgress.IsActive = false;
             LayoutCurrentSession();
-            if (!_settingsOpen) WindowEmbedder.Focus(session.WindowHandle);
+            if (!_settingsOpen && !WindowEmbedder.Focus(session.WindowHandle))
+            {
+                ShowStatus("Could not focus scrcpy window", "Mouse capture may not work until the scrcpy window receives input focus.", InfoBarSeverity.Warning);
+            }
             return;
         }
 

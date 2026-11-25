@@ -66,8 +66,24 @@ internal static class WindowEmbedder
         if (IsWindow(child) && IsWindowVisible(child)) ShowWindow(child, SW_HIDE);
     }
 
-    public static void Focus(IntPtr child)
+    public static bool Focus(IntPtr child)
     {
-        if (IsWindow(child)) SetFocus(child);
+        if (!IsWindow(child)) return false;
+
+        var currentThread = GetCurrentThreadId();
+        var childThread = GetWindowThreadProcessId(child, out _);
+        if (childThread == 0) return false;
+
+        var attached = currentThread != childThread;
+        if (attached && !AttachThreadInput(currentThread, childThread, true)) return false;
+        try
+        {
+            SetFocus(child);
+            return GetFocus() == child;
+        }
+        finally
+        {
+            if (attached) AttachThreadInput(currentThread, childThread, false);
+        }
     }
 }
