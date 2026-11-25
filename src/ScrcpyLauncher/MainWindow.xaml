@@ -68,7 +68,7 @@
             <!--  Sidebar (on Mica)  -->
             <Grid
                 x:Name="Sidebar"
-                Padding="8,0,8,8"
+                Padding="12,0,12,12"
                 RowSpacing="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -446,7 +446,7 @@
             <Border
                 x:Name="HostCard"
                 Grid.Column="1"
-                Margin="0,0,8,8"
+                Margin="0,0,12,12"
                 Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
