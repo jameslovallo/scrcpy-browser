@@ -7,6 +7,7 @@ internal static class NativeMethods
 {
     public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
+    public const int GWLP_HWNDPARENT = -8;
 
     public const long WS_CHILD = 0x40000000L;
     public const long WS_POPUP = 0x80000000L;
@@ -15,13 +16,13 @@ internal static class NativeMethods
     public const long WS_SYSMENU = 0x00080000L;
     public const long WS_MINIMIZEBOX = 0x00020000L;
     public const long WS_MAXIMIZEBOX = 0x00010000L;
-    public const long WS_CLIPSIBLINGS = 0x04000000L;
     public const long WS_EX_APPWINDOW = 0x00040000L;
 
     public const int SW_HIDE = 0;
 
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_FRAMECHANGED = 0x0020;
     public const uint SWP_SHOWWINDOW = 0x0040;
@@ -30,12 +31,7 @@ internal static class NativeMethods
 
     public const uint WM_CLOSE = 0x0010;
 
-    public const int DPI_HOSTING_BEHAVIOR_MIXED = 1;
-
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
@@ -70,26 +66,25 @@ internal static class NativeMethods
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
     [DllImport("user32.dll")]
-    public static extern int MapWindowPoints(IntPtr hWndFrom, IntPtr hWndTo, ref RECT rect, int cPoints);
-
-    [DllImport("user32.dll")]
-    public static extern IntPtr GetParent(IntPtr hWnd);
+    public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     public static extern IntPtr SetFocus(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    public static extern IntPtr GetFocus();
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-    [DllImport("kernel32.dll")]
-    public static extern uint GetCurrentThreadId();
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool attach);
+    public static extern bool ClientToScreen(IntPtr hWnd, ref POINT point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -101,9 +96,6 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
-
-    [DllImport("user32.dll")]
-    public static extern int SetThreadDpiHostingBehavior(int value);
 
     [DllImport("gdi32.dll")]
     public static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int widthEllipse, int heightEllipse);

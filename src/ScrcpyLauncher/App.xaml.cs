@@ -14,9 +14,6 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        // Allow hosting scrcpy's (SDL) window as a child even if its DPI awareness differs from ours.
-        NativeMethods.SetThreadDpiHostingBehavior(NativeMethods.DPI_HOSTING_BEHAVIOR_MIXED);
-
         _window = new MainWindow();
         _window.Activate();
     }

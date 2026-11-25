@@ -826,7 +826,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // Embedding sizes the window to the main view; the flex display (-x) follows the window size.
+        // Position the owned window over the main view; the flex display (-x) follows its size.
         WindowEmbedder.Embed(hwnd, _hwnd);
         session.MarkEmbedded(hwnd);
 
@@ -916,7 +916,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         var (x, y, width, height) = GetHostRect();
-        WindowEmbedder.Place(session.WindowHandle, x, y, width, height, GetHostCornerRadius());
+        WindowEmbedder.Place(session.WindowHandle, _hwnd, x, y, width, height, GetHostCornerRadius());
     }
 
     /// <summary>Inner corner radius of the host card (outer radius minus border), in physical pixels.</summary>
