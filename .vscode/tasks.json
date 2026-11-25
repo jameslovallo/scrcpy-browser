@@ -81,7 +81,7 @@
         },
         {
             "label": "Publish (portable win-x64)",
-            "detail": "Runs publish.ps1: self-contained Release build into dist/win-x64.",
+            "detail": "Runs publish.ps1: single-file self-contained Release build into dist/win-x64.",
             "type": "process",
             "command": "powershell",
             "args": [

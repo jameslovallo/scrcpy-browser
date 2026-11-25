@@ -18,7 +18,7 @@ public sealed partial class IconService : IDisposable
     private const int BatchSize = 40;
 
     private readonly string? _adbPath;
-    private readonly string _helperJar = Path.Combine(AppContext.BaseDirectory, "Assets", "iconhelper.jar");
+    private readonly string _helperJar = BundledAssets.IconHelperJarPath;
     private readonly string _cacheRoot = ResolveCacheRoot();
     private readonly HttpClient _http;
     private readonly ConcurrentDictionary<string, byte> _failed = new();

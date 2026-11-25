@@ -1,6 +1,6 @@
-# Builds a portable, self-contained copy of Scrcpy Launcher into .\dist\<rid>.
-# No installer or runtime prerequisites; copy the folder anywhere and run ScrcpyLauncher.exe.
-# Optionally Authenticode-signs the launcher binaries after publishing (see the signing parameters).
+# Builds a portable, self-contained single-file copy of Scrcpy Launcher into .\dist\<rid>.
+# No installer or runtime prerequisites; copy ScrcpyLauncher.exe anywhere and run it.
+# Optionally Authenticode-signs the launcher executable after publishing (see the signing parameters).
 param(
     [ValidateSet('win-x64', 'win-arm64')]
     [string]$Runtime = 'win-x64',
@@ -34,30 +34,33 @@ function Get-SignToolPath {
 
 if (Test-Path $output) { Remove-Item $output -Recurse -Force }
 
-dotnet publish $project -c Release -r $Runtime -p:Platform=$platform -o $output
+dotnet publish $project -c Release -r $Runtime -p:Platform=$platform `
+    -p:PublishSingleFile=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:IncludeAllContentForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=true `
+    -p:DebugType=None -p:DebugSymbols=false `
+    -o $output
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
 
 if ($CertificateThumbprint -or $PfxPath) {
     $signtool = Get-SignToolPath
-    # These are the only unsigned binaries in the output; the bundled .NET/Windows App SDK files are Microsoft-signed.
-    foreach ($name in @('ScrcpyLauncher.exe', 'ScrcpyLauncher.dll')) {
-        $file = Join-Path $output $name
-        if (-not (Test-Path $file)) { continue }
+    $file = Join-Path $output 'ScrcpyLauncher.exe'
+    if (-not (Test-Path $file)) { throw "Published executable not found: $file" }
 
-        $signArgs = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $TimestampUrl)
-        if ($PfxPath) {
-            $signArgs += @('/f', (Resolve-Path $PfxPath).Path)
-            if ($PfxPassword) { $signArgs += @('/p', $PfxPassword) }
-        }
-        else {
-            $signArgs += @('/sha1', $CertificateThumbprint)
-        }
-        $signArgs += $file
-
-        & $signtool @signArgs
-        if ($LASTEXITCODE -ne 0) { throw "signtool failed for $name ($LASTEXITCODE)" }
+    $signArgs = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $TimestampUrl)
+    if ($PfxPath) {
+        $signArgs += @('/f', (Resolve-Path $PfxPath).Path)
+        if ($PfxPassword) { $signArgs += @('/p', $PfxPassword) }
     }
-    Write-Host "Signed: ScrcpyLauncher.exe, ScrcpyLauncher.dll"
+    else {
+        $signArgs += @('/sha1', $CertificateThumbprint)
+    }
+    $signArgs += $file
+
+    & $signtool @signArgs
+    if ($LASTEXITCODE -ne 0) { throw "signtool failed for ScrcpyLauncher.exe ($LASTEXITCODE)" }
+    Write-Host "Signed: ScrcpyLauncher.exe"
 }
 
 if ($Zip) {

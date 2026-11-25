@@ -24,7 +24,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\AppIcon.ico;Assets\AppIcon.png;Assets\iconhelper.jar" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets\AppIcon.ico" LogicalName="ScrcpyLauncher.Assets.AppIcon.ico" />
+    <EmbeddedResource Include="Assets\iconhelper.jar" LogicalName="ScrcpyLauncher.Assets.iconhelper.jar" />
   </ItemGroup>
 
   <ItemGroup>

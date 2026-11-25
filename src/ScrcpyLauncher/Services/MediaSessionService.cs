@@ -32,7 +32,7 @@ public sealed class MediaSessionService
     private const int SnapshotFieldCount = 11;
 
     private readonly string? _adbPath;
-    private readonly string _helperJar = Path.Combine(AppContext.BaseDirectory, "Assets", "iconhelper.jar");
+    private readonly string _helperJar = BundledAssets.IconHelperJarPath;
     private readonly string _cacheRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ScrcpyLauncher",

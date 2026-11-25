@@ -70,8 +70,7 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
-        var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-        if (File.Exists(icon)) AppWindow.SetIcon(icon);
+        AppWindow.SetIcon(BundledAssets.AppIconPath);
         AppWindow.Resize(new SizeInt32(1400, 900));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {

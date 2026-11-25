@@ -50,11 +50,11 @@ dotnet run --project tests\AppListEncoding
 .\publish.ps1 -Runtime win-arm64 -Zip
 ```
 
-The output is self-contained (.NET and Windows App SDK runtimes are bundled), unpackaged, and needs no installer. Copy the folder anywhere and run it.
+The output is a single self-contained executable (.NET and Windows App SDK files are bundled), unpackaged, and needs no installer. Copy `ScrcpyLauncher.exe` anywhere and run it. Runtime files are extracted to the user's temporary .NET bundle cache when the app starts; the embedded icon and Android helper are extracted under `%LOCALAPPDATA%\ScrcpyLauncher\BundledAssets`.
 
 ## Code signing
 
-`publish.ps1` can Authenticode-sign the two unsigned binaries in the output (`ScrcpyLauncher.exe` and `ScrcpyLauncher.dll`; the bundled .NET and Windows App SDK files are already signed by Microsoft):
+`publish.ps1` can Authenticode-sign the distributed executable:
 
 ```powershell
 .\publish.ps1 -PfxPath C:\certs\scrcpy-launcher.pfx -PfxPassword 'secret'
@@ -112,7 +112,7 @@ scrcpy --serial=<id> --new-display=/<dpi> -x --no-vd-system-decorations --window
 
 ### App icons
 
-Icons and active media metadata are read on the device. The launcher pushes `Assets\iconhelper.jar` (a small dex program, source in [tools/IconHelper](tools/IconHelper/Main.java)) to `/data/local/tmp` and runs it with `app_process`, the same way scrcpy runs its server. The helper loads each app's resources, draws its icon (adaptive icons use the device's icon mask) to a 96 px PNG, and can retrieve the current media session and export its artwork; the launcher `adb pull`s the results.
+Icons and active media metadata are read on the device. The launcher extracts its bundled `iconhelper.jar` (a small dex program, source in [tools/IconHelper](tools/IconHelper/Main.java)) under `%LOCALAPPDATA%\ScrcpyLauncher\BundledAssets`, pushes it to `/data/local/tmp`, and runs it with `app_process`, the same way scrcpy runs its server. The helper loads each app's resources, draws its icon (adaptive icons use the device's icon mask) to a 96 px PNG, and can retrieve the current media session and export its artwork; the launcher `adb pull`s the results.
 
 If the device can't render an icon, the launcher uses the icon from the app's Play Store listing (`og:image`) instead. That request goes through the system proxy with your Windows credentials. Apps with no icon from either source keep a letter tile.
 
