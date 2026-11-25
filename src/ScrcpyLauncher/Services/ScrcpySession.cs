@@ -69,8 +69,7 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
     [
         .. CaptureMouse ? ["-M"] : Array.Empty<string>(),
         $"--serial={Serial}",
-        // Density follows the host display scaling so Android content is sized as it would be in a
-        // window of its logical (96-dpi) size. No size: the flex display (-x) follows the window.
+        // Density follows the host display scaling. No size: the flex display (-x) follows the window.
         DisplayDpi > 0 ? $"--new-display=/{DisplayDpi}" : "--new-display",
         "-x",
         "--no-vd-system-decorations",

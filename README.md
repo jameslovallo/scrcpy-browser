@@ -16,6 +16,7 @@ The layout is inspired by the Arc and Zen browsers:
   - **Search** box ("Open an app", localized), aligned with the top of the mirror view: click it or type to see installed apps (icon + name). Enter launches the best match.
   - **Pinned apps**: a grid of icon tiles that can be rearranged by dragging. An accent border marks the app on screen.
   - **Running apps**: unpinned sessions, each with an icon, its name, and ✕ to close it
+  - **Audio capture**: starts for the selected device at launch; the footer button shows whether it is active and toggles capture
   - Right-click a tile or running app to **Pin/Unpin**, **Relaunch** (or **Launch**), or **Close** it. **Hide** removes it from the sidebar and search (restore it in Settings). **Capture mouse** launches that app with `-M` (UHID mouse, captured) from its next launch; press Alt to release the mouse.
   - The app list contains user apps plus common system apps (Chrome, Settings, Camera, Photos, ...).
 - **Main view**: the selected app's scrcpy window, borderless and embedded in an inset card with all four corners rounded. Each app runs on its own resizable virtual display (`--new-display=/<dpi> -x`), so the Android layout follows the window size at the host display's scaling.
@@ -96,7 +97,7 @@ scrcpy --serial=<id> --new-display=/<dpi> -x --no-vd-system-decorations --window
        -K --mouse-bind=+hbn:bhsn --no-audio
 ```
 
-- No display size is passed; only the density (`/<dpi>`), computed from the window's DPI scaling (`96 × RasterizationScale`, e.g. 240 for 250%). The launcher sizes the scrcpy *window*, and with `-x` the virtual display follows it, so Android content keeps its logical size on high-DPI screens.
+- No display size is passed; only the density (`/<dpi>`), computed from the window's DPI scaling (`120 × RasterizationScale`, e.g. 180 for 150%). The launcher sizes the scrcpy *window*, and with `-x` the virtual display follows it, so Android content keeps its logical size on high-DPI screens.
 - The window starts off-screen. The launcher finds it by its unique title, re-parents it into the main view (`SetParent`, `WS_CHILD`), and keeps it sized to that view. A one-time window region (`SetWindowRgn`) rounds all four corners to match the view card. It's rebuilt only when the size changes, so there's no per-frame cost.
 - `--no-vd-system-decorations` hides the Android status and navigation bars.
 - `-K` uses UHID keyboard input (physical keyboard simulation). Apps with **Capture mouse** enabled also get `-M` (UHID mouse; scrcpy captures the pointer until Alt is pressed).
@@ -105,6 +106,7 @@ scrcpy --serial=<id> --new-display=/<dpi> -x --no-vd-system-decorations --window
   - Middle click = HOME, the back side button = BACK, and the forward side button = notification panel.
   - With Shift held, scrcpy's default bindings apply.
 - `--no-audio` disables audio forwarding. The app list comes from `scrcpy --list-apps` and is decoded as UTF-8, where `*` marks system apps. Closing a session (or the launcher) closes scrcpy gracefully, which removes the virtual display.
+- A separate `scrcpy --serial=<id> --no-video --no-window --no-control` process captures device audio, independently of app windows. The launcher starts it for the selected device and stops it when toggled off, when switching devices, or on exit.
 
 ### App icons
 

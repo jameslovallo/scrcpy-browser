@@ -295,8 +295,13 @@
                     IsClosable="True"
                     IsOpen="False" />
 
-                <!--  Footer: settings (left) and Android Back (right)  -->
+                <!--  Footer: settings (left), audio capture (center), and Android Back (right)  -->
                 <Grid Grid.Row="5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <Button
                         x:Name="SettingsButton"
                         HorizontalAlignment="Left"
@@ -307,7 +312,27 @@
                         <FontIcon FontSize="16" Glyph="&#xE713;" />
                     </Button>
                     <Button
+                        x:Name="AudioCaptureButton"
+                        Grid.Column="1"
+                        HorizontalAlignment="Center"
+                        AutomationProperties.Name="Device audio capture"
+                        Click="AudioCaptureButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Enable device audio capture">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon
+                                x:Name="AudioCaptureIcon"
+                                FontSize="16"
+                                Glyph="&#xE74F;" />
+                            <TextBlock
+                                x:Name="AudioCaptureText"
+                                VerticalAlignment="Center"
+                                Text="Audio off" />
+                        </StackPanel>
+                    </Button>
+                    <Button
                         x:Name="BackButton"
+                        Grid.Column="2"
                         HorizontalAlignment="Right"
                         AutomationProperties.Name="Back"
                         Click="BackButton_Click"

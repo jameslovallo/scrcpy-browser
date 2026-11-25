@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
@@ -38,8 +39,10 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<AndroidApp> _allApps = [];
     private DeviceInfo? _device;
+    private ScrcpyAudioSession? _audioSession;
     private CancellationTokenSource? _appsCts;
     private ScrcpySession? _current;
+    private bool _audioCaptureEnabled = true;
     private bool _syncingSelection;
     private bool _searchFocusFromUser;
     private bool _settingsOpen;
@@ -102,6 +105,7 @@ public sealed partial class MainWindow : Window
         });
 
         RefreshSidebarState();
+        UpdateAudioCaptureButton();
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -274,7 +278,130 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(DeviceButton, device?.Display ?? "No device");
         DeviceNameText.Text = device?.Name ?? "No device";
         DeviceStatusDot.Visibility = device is { IsReady: true } ? Visibility.Collapsed : Visibility.Visible;
+        await SyncAudioCaptureSessionAsync();
         if (changed || _allApps.Count == 0) await LoadAppsAsync();
+    }
+
+    private async void AudioCaptureButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_device is not { IsReady: true })
+        {
+            ShowStatus("No device", "Select a connected device to capture audio.", InfoBarSeverity.Warning);
+            return;
+        }
+
+        _audioCaptureEnabled = _audioSession?.IsRunning != true;
+        await SyncAudioCaptureSessionAsync();
+    }
+
+    private async Task SyncAudioCaptureSessionAsync()
+    {
+        var device = _device is { IsReady: true } readyDevice ? readyDevice : null;
+        if (_audioSession is { } current &&
+            (!_audioCaptureEnabled || device is null || current.Serial != device.Serial || !current.IsRunning))
+        {
+            if (!await StopAudioCaptureSessionAsync()) return;
+        }
+
+        if (!_audioCaptureEnabled || device is null)
+        {
+            UpdateAudioCaptureButton();
+            return;
+        }
+
+        if (_audioSession is { IsRunning: true } active && active.Serial == device.Serial)
+        {
+            UpdateAudioCaptureButton();
+            return;
+        }
+
+        if (_deviceService.ScrcpyPath is not { } scrcpyPath) return;
+
+        var session = new ScrcpyAudioSession(device.Serial);
+        _audioSession = session;
+        session.Exited += AudioCapture_Exited;
+        try
+        {
+            session.Start(scrcpyPath, _settings.ExtraScrcpyArgs);
+            UpdateAudioCaptureButton();
+        }
+        catch (Exception ex)
+        {
+            session.Exited -= AudioCapture_Exited;
+            _audioSession = null;
+            _audioCaptureEnabled = false;
+            await session.CloseAsync();
+            UpdateAudioCaptureButton();
+            ShowStatus("Failed to start audio capture", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async Task<bool> StopAudioCaptureSessionAsync()
+    {
+        var session = _audioSession;
+        if (session is null)
+        {
+            UpdateAudioCaptureButton();
+            return true;
+        }
+
+        session.Exited -= AudioCapture_Exited;
+        try
+        {
+            await session.CloseAsync();
+            if (ReferenceEquals(_audioSession, session)) _audioSession = null;
+            UpdateAudioCaptureButton();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowStatus("Failed to stop audio capture", ex.Message, InfoBarSeverity.Error);
+            UpdateAudioCaptureButton();
+            return false;
+        }
+    }
+
+    private void UpdateAudioCaptureButton()
+    {
+        var isCapturing = _audioSession?.IsRunning == true;
+        var hasDevice = _device is { IsReady: true } && _deviceService.ScrcpyPath is not null;
+        AudioCaptureIcon.Glyph = isCapturing ? "\uE767" : "\uE74F";
+        AudioCaptureText.Text = isCapturing ? "Audio on" : "Audio off";
+        AudioCaptureButton.IsEnabled = hasDevice;
+        var action = isCapturing ? "Disable" : "Enable";
+        var description = hasDevice ? $"{action} device audio capture" : "Connect a device to capture audio";
+        ToolTipService.SetToolTip(AudioCaptureButton, description);
+        AutomationProperties.SetName(AudioCaptureButton, description);
+    }
+
+    private void AudioCapture_Exited(object? sender, EventArgs e)
+    {
+        if (sender is not ScrcpyAudioSession session) return;
+        DispatcherQueue.TryEnqueue(() => _ = HandleAudioCaptureExitedAsync(session));
+    }
+
+    private async Task HandleAudioCaptureExitedAsync(ScrcpyAudioSession session)
+    {
+        if (!ReferenceEquals(_audioSession, session)) return;
+
+        _audioSession = null;
+        _audioCaptureEnabled = false;
+        UpdateAudioCaptureButton();
+        var exitCode = session.ExitCode;
+        var log = session.RecentLog;
+        try
+        {
+            await session.CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus("Failed to clean up audio capture", ex.Message, InfoBarSeverity.Error);
+        }
+
+        var details = string.IsNullOrEmpty(log)
+            ? $"scrcpy exited unexpectedly (code {exitCode?.ToString() ?? "unknown"})."
+            : LastLines(log, 4);
+        ShowStatus("Audio capture stopped", details, InfoBarSeverity.Warning);
     }
 
     private async Task LoadAppsAsync()
@@ -808,13 +935,13 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Android density matching the host window's DPI scaling, so mirrored content keeps its logical size
-    /// (e.g. a 250% display yields 240 dpi). scrcpy's flex display is sized in physical pixels.
+    /// Android density calibrated to the host window's DPI scaling (e.g. 150% yields 180 dpi).
+    /// scrcpy's flex display is sized in physical pixels.
     /// </summary>
     private int GetDisplayDpi()
     {
         var scale = HostArea.XamlRoot?.RasterizationScale ?? 1.0;
-        return (int)Math.Round(Math.Clamp(96 * scale, 96, 480));
+        return (int)Math.Round(Math.Clamp(120 * scale, 96, 480));
     }
 
     /// <summary>Host area bounds in physical pixels, relative to the window client area.</summary>
@@ -837,8 +964,17 @@ public sealed partial class MainWindow : Window
         _appsCts?.Cancel();
         var sessions = _sessions.ToList();
         foreach (var s in sessions) s.Exited -= Session_Exited;
+        var closeTasks = sessions
+            .Select(s => Task.Run(() => s.CloseAsync(TimeSpan.FromSeconds(1.5))))
+            .ToList();
+        if (_audioSession is { } audioSession)
+        {
+            audioSession.Exited -= AudioCapture_Exited;
+            _audioSession = null;
+            closeTasks.Add(Task.Run(audioSession.CloseAsync));
+        }
         // Close scrcpy before our window (their parent) is destroyed.
-        Task.WaitAll(sessions.Select(s => Task.Run(() => s.CloseAsync(TimeSpan.FromSeconds(1.5)))).ToArray(), TimeSpan.FromSeconds(3));
+        Task.WaitAll(closeTasks.ToArray(), TimeSpan.FromSeconds(3));
         _iconService.Dispose();
     }
 
