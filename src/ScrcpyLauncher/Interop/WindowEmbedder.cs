@@ -13,17 +13,10 @@ internal static class WindowEmbedder
         SetWindowLongPtr(child, GWL_STYLE, new IntPtr(style));
 
         var exStyle = GetWindowLongPtr(child, GWL_EXSTYLE).ToInt64();
-        SetWindowLongPtr(child, GWL_EXSTYLE, new IntPtr(exStyle & ~(WS_EX_APPWINDOW | WS_EX_CLIENTEDGE | WS_EX_WINDOWEDGE)));
+        SetWindowLongPtr(child, GWL_EXSTYLE, new IntPtr(exStyle & ~WS_EX_APPWINDOW));
 
         SetWindowLongPtr(child, GWLP_HWNDPARENT, owner);
         SetWindowPos(child, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-        var useDwmCorners = TryEnableDwmRoundedCorners(child);
-        DwmRoundedCorners[child] = useDwmCorners;
-        if (useDwmCorners)
-        {
-            var borderColor = DWMWA_COLOR_NONE;
-            DwmSetWindowAttribute(child, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
-        }
     }
 
     /// <summary>Moves/sizes the owned window over the host-client rectangle.</summary>
@@ -32,10 +25,7 @@ internal static class WindowEmbedder
         if (!IsWindow(child)) return;
         width = Math.Max(1, width);
         height = Math.Max(1, height);
-        if (!DwmRoundedCorners.TryGetValue(child, out var useDwm) || !useDwm)
-        {
-            RoundCorners(child, width, height, cornerRadius);
-        }
+        RoundCorners(child, width, height, cornerRadius);
 
         var origin = new POINT { X = x, Y = y };
         if (!ClientToScreen(owner, ref origin)) return;
@@ -49,20 +39,9 @@ internal static class WindowEmbedder
     }
 
     private static readonly Dictionary<IntPtr, (int Width, int Height, int Radius)> AppliedRegion = [];
-    private static readonly Dictionary<IntPtr, bool> DwmRoundedCorners = [];
-
-    private static bool TryEnableDwmRoundedCorners(IntPtr child)
-    {
-        var preference = DWMWCP_ROUND;
-        return DwmSetWindowAttribute(
-            child,
-            DWMWA_WINDOW_CORNER_PREFERENCE,
-            ref preference,
-            sizeof(int)) >= 0;
-    }
 
     /// <summary>
-    /// Falls back to a rounded window region when DWM rounded corners are unavailable.
+    /// Clips the window to a rounded rectangle matching the host card.
     /// </summary>
     private static void RoundCorners(IntPtr child, int width, int height, int radius)
     {
@@ -83,7 +62,6 @@ internal static class WindowEmbedder
     public static void Forget(IntPtr child)
     {
         AppliedRegion.Remove(child);
-        DwmRoundedCorners.Remove(child);
     }
 
     public static void Hide(IntPtr child)
