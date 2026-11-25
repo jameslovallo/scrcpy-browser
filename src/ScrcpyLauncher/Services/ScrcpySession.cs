@@ -17,6 +17,7 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
     private const int MaxLogLines = 50;
 
     private readonly ConcurrentQueue<string> _log = new();
+    private readonly TaskCompletionSource<int> _displayIdAvailable = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Process? _process;
     private string _status = "Starting…";
 
@@ -123,6 +124,18 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
         return IntPtr.Zero;
     }
 
+    public async Task<int?> WaitForDisplayIdAsync(TimeSpan timeout)
+    {
+        try
+        {
+            return await _displayIdAvailable.Task.WaitAsync(timeout);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
     public void MarkEmbedded(IntPtr hwnd)
     {
         WindowHandle = hwnd;
@@ -152,7 +165,11 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
     private void AppendLog(string? line)
     {
         if (string.IsNullOrWhiteSpace(line)) return;
-        if (DisplayId is null && DisplayIdRegex().Match(line) is { Success: true } m) DisplayId = int.Parse(m.Groups[1].Value);
+        if (DisplayId is null && DisplayIdRegex().Match(line) is { Success: true } m)
+        {
+            DisplayId = int.Parse(m.Groups[1].Value);
+            _displayIdAvailable.TrySetResult(DisplayId.Value);
+        }
         _log.Enqueue(line);
         while (_log.Count > MaxLogLines && _log.TryDequeue(out _)) { }
     }

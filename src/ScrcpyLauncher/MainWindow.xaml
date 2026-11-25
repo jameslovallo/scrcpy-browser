@@ -83,16 +83,16 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!--  Search: type to filter, Enter or click to launch  -->
+                <!--  Search: filter apps, or press Enter with no match to search the web  -->
                 <AutoSuggestBox
                     x:Name="SearchBox"
                     x:Uid="SearchBox"
-                    AutomationProperties.Name="Search apps"
+                    AutomationProperties.Name="Search apps or the web"
                     CornerRadius="{StaticResource OverlayCornerRadius}"
                     GotFocus="SearchBox_GotFocus"
                     LostFocus="SearchBox_LostFocus"
                     MaxSuggestionListHeight="520"
-                    PlaceholderText="Open an app"
+                    PlaceholderText="Open an app or search the web"
                     QueryIcon="Find"
                     QuerySubmitted="SearchBox_QuerySubmitted"
                     TextChanged="SearchBox_TextChanged"

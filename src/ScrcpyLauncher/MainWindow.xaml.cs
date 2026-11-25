@@ -507,11 +507,48 @@ public sealed partial class MainWindow : Window
 
     private async void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
+        var query = args.QueryText?.Trim() ?? string.Empty;
         var app = args.ChosenSuggestion as AndroidApp ?? _suggestions.FirstOrDefault();
-        if (app is null) return;
+        if (app is null && query.Length == 0) return;
         sender.Text = string.Empty;
         sender.IsSuggestionListOpen = false;
-        await LaunchOrSwitchAsync(app);
+        if (app is not null)
+        {
+            await LaunchOrSwitchAsync(app);
+            return;
+        }
+        await SearchWebAsync(query);
+    }
+
+    private async Task SearchWebAsync(string query)
+    {
+        if (_device is not { IsReady: true } device)
+        {
+            ShowStatus("No device", "Select a connected device to search the web.", InfoBarSeverity.Warning);
+            return;
+        }
+
+        try
+        {
+            var browserPackage = await _deviceService.GetDefaultBrowserPackageAsync(device.Serial);
+            var browserApp = _allApps.FirstOrDefault(a => string.Equals(a.Package, browserPackage, StringComparison.OrdinalIgnoreCase))
+                ?? await _deviceService.GetAppByPackageAsync(device.Serial, browserPackage)
+                ?? new AndroidApp(browserPackage, browserPackage, true);
+            var session = await LaunchOrSwitchAsync(browserApp, device.Serial);
+            if (session is null) return;
+
+            var displayId = await session.WaitForDisplayIdAsync(TimeSpan.FromSeconds(5));
+            if (displayId is null)
+            {
+                throw new InvalidOperationException("scrcpy did not report the browser session's virtual display ID.");
+            }
+
+            await _deviceService.OpenBrowserSearchAsync(device.Serial, browserPackage, displayId.Value, query);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus("Web search failed", ex.Message, InfoBarSeverity.Error);
+        }
     }
 
     #endregion
@@ -784,20 +821,20 @@ public sealed partial class MainWindow : Window
         await LaunchOrSwitchAsync(app, serial);
     }
 
-    private async Task LaunchOrSwitchAsync(AndroidApp app, string? serial = null)
+    private async Task<ScrcpySession?> LaunchOrSwitchAsync(AndroidApp app, string? serial = null)
     {
         SetSettingsOpen(false);
         serial ??= _device is { IsReady: true } d ? d.Serial : null;
         if (serial is null)
         {
             ShowStatus("No device", "Select a connected device first.", InfoBarSeverity.Warning);
-            return;
+            return null;
         }
 
         if (FindSession(serial, app.Package) is { } existing)
         {
             ActivateSession(existing);
-            return;
+            return existing;
         }
 
         var session = new ScrcpySession(app, serial, _settings.CaptureMouseApps.Contains(app.Package), GetDisplayDpi());
@@ -815,7 +852,7 @@ public sealed partial class MainWindow : Window
             _sessions.Remove(session);
             ActivateSession(null);
             ShowStatus("Failed to start scrcpy", ex.Message, InfoBarSeverity.Error);
-            return;
+            return null;
         }
 
         var hwnd = await session.WaitForWindowAsync(WindowTimeout);
@@ -823,7 +860,7 @@ public sealed partial class MainWindow : Window
         {
             // Exit (if any) is reported by Session_Exited; a timeout means scrcpy hung.
             if (!session.HasExited) await session.CloseAsync(TimeSpan.Zero);
-            return;
+            return null;
         }
 
         // Position the owned window over the main view; the flex display (-x) follows its size.
@@ -832,6 +869,7 @@ public sealed partial class MainWindow : Window
 
         if (_current == session) ActivateSession(session);
         else WindowEmbedder.Hide(hwnd);
+        return session;
     }
 
     private void ActivateSession(ScrcpySession? session)

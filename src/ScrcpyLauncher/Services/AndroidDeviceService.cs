@@ -30,6 +30,57 @@ public sealed partial class AndroidDeviceService
     /// <summary>Lists apps via "scrcpy --list-apps", which provides user-facing labels.</summary>
     public async Task<IReadOnlyList<AndroidApp>> GetAppsAsync(string serial, CancellationToken cancellationToken = default)
     {
+        var apps = await GetAllAppsAsync(serial, cancellationToken);
+
+        var allow = new HashSet<string>(_settings.SystemAppAllowlist, StringComparer.OrdinalIgnoreCase);
+        return apps
+            .Where(a => !a.IsSystem || _settings.ShowAllSystemApps || allow.Contains(a.Package))
+            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    public async Task<AndroidApp?> GetAppByPackageAsync(string serial, string package, CancellationToken cancellationToken = default)
+    {
+        var apps = await GetAllAppsAsync(serial, cancellationToken);
+        return apps.FirstOrDefault(a => string.Equals(a.Package, package, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<string> GetDefaultBrowserPackageAsync(string serial, CancellationToken cancellationToken = default)
+    {
+        var adb = AdbPath ?? throw new InvalidOperationException("adb was not found on PATH (or next to scrcpy).");
+        var result = await ProcessRunner.RunAsync(adb, (string[])["-s", serial, "shell", "cmd", "role", "get-role-holders", "android.app.role.BROWSER"], cancellationToken);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Could not determine the default browser: {result.Combined.Trim()}");
+        }
+
+        var package = result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(line => PackageRegex().IsMatch(line));
+        return package ?? throw new InvalidOperationException("No default browser is configured on the Android device.");
+    }
+
+    public async Task OpenBrowserSearchAsync(string serial, string browserPackage, int displayId, string query, CancellationToken cancellationToken = default)
+    {
+        if (!PackageRegex().IsMatch(browserPackage)) throw new ArgumentException("Invalid Android package name.", nameof(browserPackage));
+        if (displayId < 0) throw new ArgumentOutOfRangeException(nameof(displayId));
+
+        var adb = AdbPath ?? throw new InvalidOperationException("adb was not found on PATH (or next to scrcpy).");
+        var searchUrl = $"https://www.google.com/search?q={Uri.EscapeDataString(query)}";
+        var result = await ProcessRunner.RunAsync(adb,
+        (string[])
+        [
+            "-s", serial, "shell", "am", "start", "--display", displayId.ToString(),
+            "-a", "android.intent.action.VIEW", "-d", searchUrl, "-p", browserPackage,
+        ], cancellationToken);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Could not open the search in the default browser: {result.Combined.Trim()}");
+        }
+    }
+
+    private async Task<IReadOnlyList<AndroidApp>> GetAllAppsAsync(string serial, CancellationToken cancellationToken)
+    {
         var scrcpy = ScrcpyPath ?? throw new InvalidOperationException("scrcpy was not found on PATH.");
         var result = await ProcessRunner.RunAsync(scrcpy, [$"--serial={serial}", "--list-apps"], cancellationToken, Encoding.UTF8);
         var apps = ParseApps(result.Combined);
@@ -37,12 +88,7 @@ public sealed partial class AndroidDeviceService
         {
             throw new InvalidOperationException($"scrcpy --list-apps failed: {LastLines(result.StandardError, 3)}");
         }
-
-        var allow = new HashSet<string>(_settings.SystemAppAllowlist, StringComparer.OrdinalIgnoreCase);
-        return apps
-            .Where(a => !a.IsSystem || _settings.ShowAllSystemApps || allow.Contains(a.Package))
-            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+        return apps;
     }
 
     /// <summary>
@@ -130,4 +176,7 @@ public sealed partial class AndroidDeviceService
 
     [GeneratedRegex(@"^\s*(?<kind>[*-])\s+(?<name>.+?)\s*$")]
     private static partial Regex NameOnlyRegex();
+
+    [GeneratedRegex(@"^[A-Za-z][\w]*(?:\.[\w]+)+$")]
+    private static partial Regex PackageRegex();
 }
