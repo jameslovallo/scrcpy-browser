@@ -17,6 +17,7 @@ internal static class WindowEmbedder
 
         SetWindowLongPtr(child, GWLP_HWNDPARENT, owner);
         SetWindowPos(child, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        DwmRoundedCorners[child] = TryEnableDwmRoundedCorners(child);
     }
 
     /// <summary>Moves/sizes the owned window over the host-client rectangle.</summary>
@@ -25,7 +26,10 @@ internal static class WindowEmbedder
         if (!IsWindow(child)) return;
         width = Math.Max(1, width);
         height = Math.Max(1, height);
-        RoundCorners(child, width, height, cornerRadius);
+        if (!DwmRoundedCorners.TryGetValue(child, out var useDwm) || !useDwm)
+        {
+            RoundCorners(child, width, height, cornerRadius);
+        }
 
         var origin = new POINT { X = x, Y = y };
         if (!ClientToScreen(owner, ref origin)) return;
@@ -39,10 +43,20 @@ internal static class WindowEmbedder
     }
 
     private static readonly Dictionary<IntPtr, (int Width, int Height, int Radius)> AppliedRegion = [];
+    private static readonly Dictionary<IntPtr, bool> DwmRoundedCorners = [];
+
+    private static bool TryEnableDwmRoundedCorners(IntPtr child)
+    {
+        var preference = DWMWCP_ROUND;
+        return DwmSetWindowAttribute(
+            child,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ref preference,
+            sizeof(int)) >= 0;
+    }
 
     /// <summary>
-    /// Clips the window to a rounded rectangle matching the host card. Window regions are applied by the window
-    /// manager, so this costs nothing per frame; the region is only rebuilt when the size or radius changes.
+    /// Falls back to a rounded window region when DWM rounded corners are unavailable.
     /// </summary>
     private static void RoundCorners(IntPtr child, int width, int height, int radius)
     {
@@ -60,7 +74,11 @@ internal static class WindowEmbedder
         }
     }
 
-    public static void Forget(IntPtr child) => AppliedRegion.Remove(child);
+    public static void Forget(IntPtr child)
+    {
+        AppliedRegion.Remove(child);
+        DwmRoundedCorners.Remove(child);
+    }
 
     public static void Hide(IntPtr child)
     {

@@ -31,6 +31,9 @@ internal static class NativeMethods
 
     public const uint WM_CLOSE = 0x0010;
 
+    public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    public const int DWMWCP_ROUND = 2;
+
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
@@ -102,6 +105,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    [DllImport("dwmapi.dll", ExactSpelling = true)]
+    public static extern int DwmSetWindowAttribute(IntPtr hWnd, int attribute, ref int value, uint valueSize);
 
     [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

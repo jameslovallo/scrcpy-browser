@@ -1,4 +1,4 @@
-# Builds the on-device icon helper (Main.java -> dex jar) used by Scrcpy Launcher.
+# Builds the on-device icon and media-session helper (Main.java -> dex jar).
 # Requirements: a JDK (e.g. `winget install Microsoft.OpenJDK.21`) and r8.jar from Google Maven:
 #   https://dl.google.com/android/maven2/com/android/tools/r8/<version>/r8-<version>.jar
 param(

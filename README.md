@@ -17,6 +17,7 @@ The layout is inspired by the Arc and Zen browsers:
   - **Pinned apps**: a grid of icon tiles that can be rearranged by dragging. An accent border marks the app on screen.
   - **Running apps**: unpinned sessions, each with an icon, its name, and ✕ to close it
   - **Audio capture**: starts for the selected device at launch; the footer button shows whether it is active and toggles capture
+  - **Media card**: shows the active Android media session's artwork, title, and playback controls; click the artwork to open its app in scrcpy
   - Right-click a tile or running app to **Pin/Unpin**, **Relaunch** (or **Launch**), or **Close** it. **Hide** removes it from the sidebar and search (restore it in Settings). **Capture mouse** launches that app with `-M` (UHID mouse, captured) from its next launch; press Alt to release the mouse.
   - The app list contains user apps plus common system apps (Chrome, Settings, Camera, Photos, ...).
 - **Main view**: the selected app's scrcpy window, borderless and embedded in an inset card with all four corners rounded. Each app runs on its own resizable virtual display (`--new-display=/<dpi> -x`), so the Android layout follows the window size at the host display's scaling.
@@ -107,10 +108,11 @@ scrcpy --serial=<id> --new-display=/<dpi> -x --no-vd-system-decorations --window
   - With Shift held, scrcpy's default bindings apply.
 - `--no-audio` disables audio forwarding. The app list comes from `scrcpy --list-apps` and is decoded as UTF-8, where `*` marks system apps. Closing a session (or the launcher) closes scrcpy gracefully, which removes the virtual display.
 - A separate `scrcpy --serial=<id> --no-video --no-window --no-control` process captures device audio, independently of app windows. The launcher starts it for the selected device and stops it when toggled off, when switching devices, or on exit.
+- The sidebar media card polls the active media-key session through the on-device helper and uses `cmd media_session dispatch` for playback controls. Artwork is cached under `%LOCALAPPDATA%\ScrcpyLauncher\MediaCache`.
 
 ### App icons
 
-Icons are rendered on the device. The launcher pushes `Assets\iconhelper.jar` (a small dex program, source in [tools/IconHelper](tools/IconHelper/Main.java)) to `/data/local/tmp` and runs it with `app_process`, the same way scrcpy runs its server. The helper loads each app's resources, draws its icon (adaptive icons use the device's icon mask) to a 96 px PNG, and the launcher `adb pull`s the results.
+Icons and active media metadata are read on the device. The launcher pushes `Assets\iconhelper.jar` (a small dex program, source in [tools/IconHelper](tools/IconHelper/Main.java)) to `/data/local/tmp` and runs it with `app_process`, the same way scrcpy runs its server. The helper loads each app's resources, draws its icon (adaptive icons use the device's icon mask) to a 96 px PNG, and can retrieve the current media session and export its artwork; the launcher `adb pull`s the results.
 
 If the device can't render an icon, the launcher uses the icon from the app's Play Store listing (`og:image`) instead. That request goes through the system proxy with your Windows credentials. Apps with no icon from either source keep a letter tile.
 

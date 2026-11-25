@@ -2,11 +2,14 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 /**
- * Renders Android application icons to PNG files on the device.
+ * Renders Android application icons and reads the active media session on the device.
  *
  * Run with: CLASSPATH=/data/local/tmp/scrcpylauncher-iconhelper.jar app_process / Main OUT_DIR SIZE PKG...
+ * Or: CLASSPATH=/data/local/tmp/scrcpylauncher-iconhelper.jar app_process / Main media snapshot ART_FILE
  * Prints "OK pkg" or "FAIL pkg reason" for every package.
  *
  * Written against JDK classes only (Android framework APIs are reached via reflection)
@@ -16,6 +19,11 @@ public class Main {
     private static final int DENSITY = 480;
 
     public static void main(String[] args) throws Throwable {
+        if (args.length > 0 && "media".equals(args[0])) {
+            runMediaCommand(args);
+            System.exit(0);
+            return;
+        }
         if (args.length < 3) {
             System.out.println("usage: Main OUT_DIR SIZE PKG...");
             return;
@@ -66,6 +74,132 @@ public class Main {
         }
         System.out.flush();
         System.exit(0);
+    }
+
+    private static void runMediaCommand(String[] args) throws Throwable {
+        if (args.length != 3 || !"snapshot".equals(args[1])) {
+            throw new IllegalArgumentException("usage: Main media snapshot ART_FILE");
+        }
+        writeMediaSnapshot(args[2]);
+        System.out.flush();
+    }
+
+    private static ActiveMedia selectActiveMedia() throws Throwable {
+        Class<?> serviceManager = Class.forName("android.os.ServiceManager");
+        Object binder = serviceManager.getMethod("getService", String.class).invoke(null, "media_session");
+        if (binder == null) throw new IllegalStateException("Media session service unavailable");
+
+        Class<?> binderClass = Class.forName("android.os.IBinder");
+        Class<?> stubClass = Class.forName("android.media.session.ISessionManager$Stub");
+        Object manager = stubClass.getMethod("asInterface", binderClass).invoke(null, binder);
+        Class<?> managerClass = Class.forName("android.media.session.ISessionManager");
+        Object token = managerClass.getMethod("getMediaKeyEventSession", String.class)
+            .invoke(manager, "com.android.shell");
+        if (token == null) return null;
+
+        Class<?> tokenClass = Class.forName("android.media.session.MediaSession$Token");
+        Object controller = tokenClass.getMethod("getBinder").invoke(token);
+        Class<?> controllerClass = Class.forName("android.media.session.ISessionController");
+        String owner = (String) controllerClass.getMethod("getPackageName").invoke(controller);
+        Object metadata = controllerClass.getMethod("getMetadata").invoke(controller);
+        Object playbackState = controllerClass.getMethod("getPlaybackState").invoke(controller);
+        return new ActiveMedia(controller, metadata, playbackState, owner);
+    }
+
+    private static void writeMediaSnapshot(String artPath) throws Throwable {
+        File artFile = new File(artPath);
+        if (artFile.exists()) artFile.delete();
+
+        ActiveMedia media = selectActiveMedia();
+        if (media == null) {
+            System.out.println("NONE");
+            return;
+        }
+
+        String title = metadataString(media.metadata, "android.media.metadata.DISPLAY_TITLE");
+        if (title.length() == 0) title = metadataString(media.metadata, "android.media.metadata.TITLE");
+        if (title.length() == 0) title = media.packageName;
+        String artist = metadataString(media.metadata, "android.media.metadata.DISPLAY_SUBTITLE");
+        if (artist.length() == 0) artist = metadataString(media.metadata, "android.media.metadata.ARTIST");
+        String album = metadataString(media.metadata, "android.media.metadata.ALBUM");
+        String mediaId = metadataString(media.metadata, "android.media.metadata.MEDIA_ID");
+
+        long position = 0;
+        long duration = metadataLong(media.metadata, "android.media.metadata.DURATION");
+        long actions = 0;
+        if (media.playbackState != null) {
+            Class<?> stateClass = media.playbackState.getClass();
+            position = ((Long) stateClass.getMethod("getPosition").invoke(media.playbackState)).longValue();
+            actions = ((Long) stateClass.getMethod("getActions").invoke(media.playbackState)).longValue();
+        }
+
+        Object bitmap = metadataBitmap(media.metadata, "android.media.metadata.ART");
+        if (bitmap == null) bitmap = metadataBitmap(media.metadata, "android.media.metadata.ALBUM_ART");
+        if (bitmap == null) bitmap = metadataBitmap(media.metadata, "android.media.metadata.DISPLAY_ICON");
+        boolean hasArt = bitmap != null && writeBitmap(bitmap, artFile);
+        int state = media.playbackState == null
+            ? 0
+            : ((Integer) media.playbackState.getClass().getMethod("getState").invoke(media.playbackState)).intValue();
+
+        System.out.println("MEDIA\t" + encode(media.packageName)
+            + "\t" + encode(title)
+            + "\t" + encode(artist)
+            + "\t" + encode(album)
+            + "\t" + state
+            + "\t" + position
+            + "\t" + duration
+            + "\t" + actions
+            + "\t" + encode(mediaId)
+            + "\t" + (hasArt ? "1" : "0"));
+    }
+
+    private static String metadataString(Object metadata, String key) throws Throwable {
+        if (metadata == null) return "";
+        Object value = metadata.getClass().getMethod("getString", String.class).invoke(metadata, key);
+        return value == null ? "" : value.toString();
+    }
+
+    private static long metadataLong(Object metadata, String key) throws Throwable {
+        if (metadata == null) return 0;
+        return ((Long) metadata.getClass().getMethod("getLong", String.class).invoke(metadata, key)).longValue();
+    }
+
+    private static Object metadataBitmap(Object metadata, String key) throws Throwable {
+        if (metadata == null) return null;
+        return metadata.getClass().getMethod("getBitmap", String.class).invoke(metadata, key);
+    }
+
+    private static boolean writeBitmap(Object bitmap, File output) throws Throwable {
+        if (bitmap == null) return false;
+        File parent = output.getParentFile();
+        if (parent != null) parent.mkdirs();
+
+        Class<?> bitmapClass = Class.forName("android.graphics.Bitmap");
+        Class<?> formatClass = Class.forName("android.graphics.Bitmap$CompressFormat");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Object png = Enum.valueOf((Class) formatClass, "PNG");
+        try (FileOutputStream stream = new FileOutputStream(output)) {
+            return ((Boolean) bitmapClass.getMethod("compress", formatClass, int.class, java.io.OutputStream.class)
+                .invoke(bitmap, png, 100, stream)).booleanValue();
+        }
+    }
+
+    private static String encode(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static final class ActiveMedia {
+        final Object controller;
+        final Object metadata;
+        final Object playbackState;
+        final String packageName;
+
+        ActiveMedia(Object controller, Object metadata, Object playbackState, String packageName) {
+            this.controller = controller;
+            this.metadata = metadata;
+            this.playbackState = playbackState;
+            this.packageName = packageName;
+        }
     }
 
     private static void render(Object ai, File out, int size) throws Throwable {

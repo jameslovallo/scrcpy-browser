@@ -62,14 +62,28 @@ public sealed partial class IconService : IDisposable
 
     private async Task<List<string>> LoadFromDeviceAsync(string serial, List<string> packages, string cacheDir, Action<string, string> onIcon, CancellationToken ct)
     {
-        if (_adbPath is null || !File.Exists(_helperJar)) return packages;
+        if (_adbPath is not { } adb || !File.Exists(_helperJar)) return packages;
 
+        var helperLock = DeviceHelperLock.For(serial);
+        await helperLock.WaitAsync(ct);
+        try
+        {
+            return await LoadFromDeviceLockedAsync(adb, serial, packages, cacheDir, onIcon, ct);
+        }
+        finally
+        {
+            helperLock.Release();
+        }
+    }
+
+    private async Task<List<string>> LoadFromDeviceLockedAsync(string adb, string serial, List<string> packages, string cacheDir, Action<string, string> onIcon, CancellationToken ct)
+    {
         var unresolved = new List<string>();
         try
         {
             if (!_helperPushed.ContainsKey(serial))
             {
-                var push = await ProcessRunner.RunAsync(_adbPath, ["-s", serial, "push", _helperJar, RemoteJar], ct);
+                var push = await ProcessRunner.RunAsync(adb, ["-s", serial, "push", _helperJar, RemoteJar], ct);
                 if (push.ExitCode != 0) return packages;
                 _helperPushed[serial] = 0;
             }
@@ -78,7 +92,7 @@ public sealed partial class IconService : IDisposable
             {
                 var batch = packages.Skip(i).Take(BatchSize).ToList();
                 var remote = $"{RemoteDir}/{i / BatchSize}";
-                var run = await ProcessRunner.RunAsync(_adbPath,
+                var run = await ProcessRunner.RunAsync(adb,
                     ["-s", serial, "shell", $"rm -rf {remote}; CLASSPATH={RemoteJar} app_process / Main {remote} {IconSize} {string.Join(' ', batch)}"], ct);
 
                 var ok = new HashSet<string>(
@@ -92,7 +106,7 @@ public sealed partial class IconService : IDisposable
                     var temp = Path.Combine(Path.GetTempPath(), "scrcpylauncher-icons-" + Guid.NewGuid().ToString("N"));
                     try
                     {
-                        await ProcessRunner.RunAsync(_adbPath, ["-s", serial, "pull", remote, temp], ct);
+                        await ProcessRunner.RunAsync(adb, ["-s", serial, "pull", remote, temp], ct);
                         foreach (var pkg in batch.Where(ok.Contains))
                         {
                             var src = Path.Combine(temp, pkg + ".png");
@@ -111,7 +125,7 @@ public sealed partial class IconService : IDisposable
                 unresolved.AddRange(batch.Where(p => !ok.Contains(p)));
             }
 
-            await ProcessRunner.RunAsync(_adbPath, ["-s", serial, "shell", $"rm -rf {RemoteDir}"], ct);
+            await ProcessRunner.RunAsync(adb, ["-s", serial, "shell", $"rm -rf {RemoteDir}"], ct);
         }
         catch (OperationCanceledException)
         {

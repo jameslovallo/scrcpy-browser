@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using ScrcpyLauncher.Interop;
 using ScrcpyLauncher.Models;
 using ScrcpyLauncher.Services;
@@ -24,6 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly AppSettings _settings;
     private readonly AndroidDeviceService _deviceService;
     private readonly IconService _iconService;
+    private readonly MediaSessionService _mediaSessionService;
     private readonly IntPtr _hwnd;
 
     private readonly List<DeviceInfo> _devices = [];
@@ -40,7 +42,9 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<AndroidApp> _allApps = [];
     private DeviceInfo? _device;
     private ScrcpyAudioSession? _audioSession;
+    private MediaSnapshot? _mediaSnapshot;
     private CancellationTokenSource? _appsCts;
+    private CancellationTokenSource? _mediaPollCts;
     private ScrcpySession? _current;
     private bool _audioCaptureEnabled = true;
     private bool _syncingSelection;
@@ -54,6 +58,7 @@ public sealed partial class MainWindow : Window
         _settings = AppSettings.Load();
         _deviceService = new AndroidDeviceService(_settings);
         _iconService = new IconService(_deviceService.AdbPath);
+        _mediaSessionService = new MediaSessionService(_deviceService.AdbPath);
         _hwnd = WindowNative.GetWindowHandle(this);
 
         if (Enum.TryParse<ElementTheme>(_settings.Theme, ignoreCase: true, out var theme) && theme != ElementTheme.Default)
@@ -144,18 +149,15 @@ public sealed partial class MainWindow : Window
         tb.ButtonPressedBackgroundColor = dark ? Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x06, 0x00, 0x00, 0x00);
     }
 
-    // Empty space inside the 16px device-icon box, left of the phone glyph.
-    private const double DeviceIconLeftInset = 1.5;
-
     /// <summary>
-    /// Lines the title bar's device icon up with the sidebar content (search box) left edge, and
+    /// Lines the device name up with the sidebar content (search box) left edge, and
     /// stretches the header to the sidebar's right edge so the focused-app title starts over the view.
     /// </summary>
     private void AlignSidebarHeader()
     {
         if (SidebarHeader.XamlRoot is null) return;
         var naturalLeft = SidebarHeader.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0)).X - SidebarHeader.Margin.Left;
-        var contentLeft = Sidebar.Padding.Left - DeviceButton.Padding.Left - DeviceButton.BorderThickness.Left - DeviceIconLeftInset;
+        var contentLeft = Sidebar.Padding.Left - DeviceButton.Padding.Left - DeviceButton.BorderThickness.Left;
         var contentRight = SidebarColumn.ActualWidth - Sidebar.Padding.Right;
         var indent = contentLeft - naturalLeft;
         var width = Math.Max(0, contentRight - naturalLeft - indent);
@@ -278,8 +280,151 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(DeviceButton, device?.Display ?? "No device");
         DeviceNameText.Text = device?.Name ?? "No device";
         DeviceStatusDot.Visibility = device is { IsReady: true } ? Visibility.Collapsed : Visibility.Visible;
+        StartMediaPolling();
         await SyncAudioCaptureSessionAsync();
         if (changed || _allApps.Count == 0) await LoadAppsAsync();
+    }
+
+    private void StartMediaPolling()
+    {
+        _mediaPollCts?.Cancel();
+        _mediaSnapshot = null;
+        UpdateMediaCard(null);
+        if (_device is not { IsReady: true } device || _deviceService.AdbPath is null) return;
+
+        var cts = _mediaPollCts = new CancellationTokenSource();
+        _ = PollMediaAsync(device.Serial, cts.Token);
+    }
+
+    private async Task PollMediaAsync(string serial, CancellationToken cancellationToken)
+    {
+        var failureReported = false;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var snapshot = await _mediaSessionService.GetSnapshotAsync(serial, cancellationToken);
+                failureReported = false;
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (_device?.Serial != serial || HasSameMediaCardContent(_mediaSnapshot, snapshot)) return;
+                    _mediaSnapshot = snapshot;
+                    UpdateMediaCard(snapshot);
+                });
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                if (!failureReported)
+                {
+                    failureReported = true;
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (_device?.Serial == serial)
+                            ShowStatus("Media information unavailable", ex.Message, InfoBarSeverity.Warning);
+                    });
+                }
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+        }
+    }
+
+    private static bool HasSameMediaCardContent(MediaSnapshot? current, MediaSnapshot? next) =>
+        current is null
+            ? next is null
+            : next is not null &&
+              current.Serial == next.Serial &&
+              current.PackageName == next.PackageName &&
+              current.Title == next.Title &&
+              current.Artist == next.Artist &&
+              current.Album == next.Album &&
+              current.PlaybackState == next.PlaybackState &&
+              current.Actions == next.Actions &&
+              current.HasArtwork == next.HasArtwork &&
+              current.ArtworkPath == next.ArtworkPath;
+
+    private void UpdateMediaCard(MediaSnapshot? snapshot)
+    {
+        MediaCard.Visibility = snapshot is null ? Visibility.Collapsed : Visibility.Visible;
+        if (snapshot is null)
+        {
+            MediaArtwork.Source = null;
+            MediaArtwork.Visibility = Visibility.Collapsed;
+            MediaArtworkPlaceholder.Visibility = Visibility.Visible;
+            MediaTitleText.Text = string.Empty;
+            MediaArtistText.Text = string.Empty;
+            return;
+        }
+
+        MediaTitleText.Text = snapshot.Title;
+        MediaArtistText.Text = string.IsNullOrWhiteSpace(snapshot.Artist)
+            ? snapshot.Album
+            : snapshot.Artist;
+        MediaArtwork.Source = snapshot.ArtworkPath is null ? null : new BitmapImage(new Uri(snapshot.ArtworkPath));
+        MediaArtwork.Visibility = snapshot.ArtworkPath is null ? Visibility.Collapsed : Visibility.Visible;
+        MediaArtworkPlaceholder.Visibility = snapshot.ArtworkPath is null ? Visibility.Visible : Visibility.Collapsed;
+        AutomationProperties.SetName(MediaArtworkButton, $"Open {snapshot.Title}");
+        ToolTipService.SetToolTip(MediaArtworkButton, $"Open {snapshot.Title} in scrcpy");
+        MediaPreviousButton.IsEnabled = snapshot.CanPrevious;
+        MediaNextButton.IsEnabled = snapshot.CanNext;
+        MediaPlaybackButton.IsEnabled = snapshot.CanTogglePlayback;
+        MediaPlaybackIcon.Glyph = snapshot.IsPlaying ? "\uE769" : "\uE768";
+        AutomationProperties.SetName(MediaPlaybackButton, snapshot.IsPlaying ? "Pause" : "Play");
+    }
+
+    private async void MediaArtworkButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_mediaSnapshot is not { } snapshot || _device?.Serial != snapshot.Serial) return;
+        try
+        {
+            var app = _allApps.FirstOrDefault(a => string.Equals(a.Package, snapshot.PackageName, StringComparison.OrdinalIgnoreCase))
+                ?? await _deviceService.GetAppByPackageAsync(snapshot.Serial, snapshot.PackageName)
+                ?? new AndroidApp(snapshot.Title, snapshot.PackageName, isSystem: true);
+            await LaunchOrSwitchAsync(app, snapshot.Serial);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus("Could not open media app", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async void MediaPreviousButton_Click(object sender, RoutedEventArgs e) =>
+        await DispatchMediaCommandAsync("previous");
+
+    private async void MediaNextButton_Click(object sender, RoutedEventArgs e) =>
+        await DispatchMediaCommandAsync("next");
+
+    private async void MediaPlaybackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_mediaSnapshot is not { } snapshot) return;
+        var command = (snapshot.Actions & 512) != 0
+            ? "play-pause"
+            : snapshot.IsPlaying ? "pause" : "play";
+        await DispatchMediaCommandAsync(command);
+    }
+
+    private async Task DispatchMediaCommandAsync(string command)
+    {
+        if (_mediaSnapshot is not { } snapshot) return;
+        try
+        {
+            await _mediaSessionService.DispatchAsync(snapshot.Serial, command);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus("Media control failed", ex.Message, InfoBarSeverity.Warning);
+        }
     }
 
     private async void AudioCaptureButton_Click(object sender, RoutedEventArgs e)
@@ -1000,6 +1145,7 @@ public sealed partial class MainWindow : Window
         _layoutTimer.Stop();
         _shortcuts.Dispose();
         _appsCts?.Cancel();
+        _mediaPollCts?.Cancel();
         var sessions = _sessions.ToList();
         foreach (var s in sessions) s.Exited -= Session_Exited;
         var closeTasks = sessions
