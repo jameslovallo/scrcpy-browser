@@ -20,11 +20,12 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
     private Process? _process;
     private string _status = "Starting…";
 
-    public ScrcpySession(AndroidApp app, string serial, bool captureMouse = false)
+    public ScrcpySession(AndroidApp app, string serial, bool captureMouse = false, int displayDpi = 0)
     {
         App = app;
         Serial = serial;
         CaptureMouse = captureMouse;
+        DisplayDpi = displayDpi;
         WindowTitle = $"ScrcpyLauncher-{Guid.NewGuid():N}";
     }
 
@@ -37,6 +38,9 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
     public string Serial { get; }
     public string WindowTitle { get; }
     public bool CaptureMouse { get; }
+
+    /// <summary>Density forwarded to the virtual display (Android dpi); 0 means scrcpy's default.</summary>
+    public int DisplayDpi { get; }
     public string Name => App.Name;
     public string Initial => App.Initial;
     public IntPtr WindowHandle { get; private set; }
@@ -65,8 +69,9 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
     [
         .. CaptureMouse ? ["-M"] : Array.Empty<string>(),
         $"--serial={Serial}",
-        // No size: the flex display (-x) follows the window, which the launcher sizes when embedding.
-        "--new-display",
+        // Density follows the host display scaling so Android content is sized as it would be in a
+        // window of its logical (96-dpi) size. No size: the flex display (-x) follows the window.
+        DisplayDpi > 0 ? $"--new-display=/{DisplayDpi}" : "--new-display",
         "-x",
         "--no-vd-system-decorations",
         "--window-borderless",
@@ -77,6 +82,8 @@ public sealed partial class ScrcpySession : INotifyPropertyChanged
         "--window-y=-20000",
         // Keyboard: simulated physical keyboard (UHID).
         "-K",
+        // Audio is never forwarded.
+        "--no-audio",
         // Right click forwarded, middle = HOME, 4th (mouse back) = BACK, 5th = notifications;
         // with Shift: the scrcpy defaults.
         "--mouse-bind=+hbn:bhsn",

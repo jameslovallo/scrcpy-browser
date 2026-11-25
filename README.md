@@ -18,7 +18,7 @@ The layout is inspired by the Arc and Zen browsers:
   - **Running apps**: unpinned sessions, each with an icon, its name, and ✕ to close it
   - Right-click a tile or running app to **Pin/Unpin**, **Relaunch** (or **Launch**), or **Close** it. **Hide** removes it from the sidebar and search (restore it in Settings). **Capture mouse** launches that app with `-M` (UHID mouse, captured) from its next launch; press Alt to release the mouse.
   - The app list contains user apps plus common system apps (Chrome, Settings, Camera, Photos, ...).
-- **Main view**: the selected app's scrcpy window, borderless and embedded in an inset card with all four corners rounded. Each app runs on its own resizable virtual display (`--new-display -x`), so the Android layout follows the window size.
+- **Main view**: the selected app's scrcpy window, borderless and embedded in an inset card with all four corners rounded. Each app runs on its own resizable virtual display (`--new-display=/<dpi> -x`), so the Android layout follows the window size at the host display's scaling.
 - **Settings view**: restore hidden apps, and uninstall apps. Uninstall asks for confirmation first. User apps are removed with `adb uninstall <pkg>`; system apps with `adb shell pm uninstall --user 0 <pkg>`, which removes them for the current user only.
 
 ## Requirements
@@ -50,6 +50,27 @@ dotnet run --project tests\AppListEncoding
 
 The output is self-contained (.NET and Windows App SDK runtimes are bundled), unpackaged, and needs no installer. Copy the folder anywhere and run it.
 
+## Code signing
+
+`publish.ps1` can Authenticode-sign the two unsigned binaries in the output (`ScrcpyLauncher.exe` and `ScrcpyLauncher.dll`; the bundled .NET and Windows App SDK files are already signed by Microsoft):
+
+```powershell
+.\publish.ps1 -PfxPath C:\certs\scrcpy-launcher.pfx -PfxPassword 'secret'
+.\publish.ps1 -CertificateThumbprint 0123456789ABCDEF0123456789ABCDEF01234567
+```
+
+Signatures use SHA-256 and are timestamped (override with `-TimestampUrl`). `signtool.exe` is taken from `PATH`, or from the `Microsoft.Windows.SDK.BuildTools` package restored by the build.
+
+A self-signed certificate is enough for local tooling that checks Authenticode (and to test the pipeline):
+
+```powershell
+$cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Scrcpy Launcher Dev' `
+    -KeyUsage DigitalSignature -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(2)
+.\publish.ps1 -CertificateThumbprint $cert.Thumbprint
+```
+
+Note: **a self-signed certificate does not satisfy Smart App Control** — SAC only accepts RSA certificates issued by a CA in the Microsoft Trusted Root Program, and it has no per-app exclusion. With Smart App Control enabled, unsigned builds (including local ones) are blocked from loading, so for development either turn SAC off (Settings → Privacy & security → Windows Security → App & browser control → Smart App Control) or test unsigned builds in a VM.
+
 ## Settings
 
 `settings.json` is created next to the executable on first run:
@@ -58,7 +79,7 @@ The output is self-contained (.NET and Windows App SDK runtimes are bundled), un
 | --- | --- |
 | `ScrcpyPath` / `AdbPath` | Executable name (resolved via `PATH`) or absolute path |
 | `Theme` | `System` (default, follows Windows light/dark), `Light` or `Dark` |
-| `ExtraScrcpyArgs` | Extra arguments for every session, e.g. `["--no-audio", "--max-fps=60"]` |
+| `ExtraScrcpyArgs` | Extra arguments for every session, e.g. `["--max-fps=60"]` |
 | `PinnedApps` | Package names shown as pinned tiles (default: Chrome, Settings). Updated by Pin/Unpin. |
 | `CaptureMouseApps` | Packages launched with `-M` (mouse captured). Updated by the Capture mouse menu option. |
 | `HiddenApps` | Packages hidden from the sidebar and search. Updated by Hide and by Restore in Settings. |
@@ -70,12 +91,12 @@ The output is self-contained (.NET and Windows App SDK runtimes are bundled), un
 For each app, the launcher runs:
 
 ```
-scrcpy --serial=<id> --new-display -x --no-vd-system-decorations --window-borderless
+scrcpy --serial=<id> --new-display=/<dpi> -x --no-vd-system-decorations --window-borderless
        --window-title=<unique> --start-app=<package> --window-x=-20000 --window-y=-20000
-       -K --mouse-bind=+hbn:bhsn --audio-source=output
+       -K --mouse-bind=+hbn:bhsn --no-audio
 ```
 
-- No display size is passed. The launcher sizes the scrcpy *window*, and with `-x` the virtual display follows it.
+- No display size is passed; only the density (`/<dpi>`), computed from the window's DPI scaling (`96 × RasterizationScale`, e.g. 240 for 250%). The launcher sizes the scrcpy *window*, and with `-x` the virtual display follows it, so Android content keeps its logical size on high-DPI screens.
 - The window starts off-screen. The launcher finds it by its unique title, re-parents it into the main view (`SetParent`, `WS_CHILD`), and keeps it sized to that view. A one-time window region (`SetWindowRgn`) rounds all four corners to match the view card. It's rebuilt only when the size changes, so there's no per-frame cost.
 - `--no-vd-system-decorations` hides the Android status and navigation bars.
 - `-K` uses UHID keyboard input (physical keyboard simulation). Apps with **Capture mouse** enabled also get `-M` (UHID mouse; scrcpy captures the pointer until Alt is pressed).
@@ -83,7 +104,7 @@ scrcpy --serial=<id> --new-display -x --no-vd-system-decorations --window-border
   - Right click is forwarded to the app.
   - Middle click = HOME, the back side button = BACK, and the forward side button = notification panel.
   - With Shift held, scrcpy's default bindings apply.
-- Each session captures the device audio. To avoid hearing it once per session, the launcher mutes the Windows audio session of every scrcpy process except the one on screen (Core Audio `ISimpleAudioVolume`). The app list comes from `scrcpy --list-apps` and is decoded as UTF-8, where `*` marks system apps. Closing a session (or the launcher) closes scrcpy gracefully, which removes the virtual display.
+- `--no-audio` disables audio forwarding. The app list comes from `scrcpy --list-apps` and is decoded as UTF-8, where `*` marks system apps. Closing a session (or the launcher) closes scrcpy gracefully, which removes the virtual display.
 
 ### App icons
 

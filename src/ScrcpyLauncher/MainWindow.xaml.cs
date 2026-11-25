@@ -61,7 +61,7 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = new MicaBackdrop();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
         AppWindow.Resize(new SizeInt32(1400, 900));
@@ -674,7 +674,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var session = new ScrcpySession(app, serial, _settings.CaptureMouseApps.Contains(app.Package));
+        var session = new ScrcpySession(app, serial, _settings.CaptureMouseApps.Contains(app.Package), GetDisplayDpi());
         session.Exited += Session_Exited;
         _sessions.Add(session);
         ActivateSession(session);
@@ -805,6 +805,16 @@ public sealed partial class MainWindow : Window
             if (s != _current && s.IsEmbedded) WindowEmbedder.Hide(s.WindowHandle);
         }
         LayoutCurrentSession();
+    }
+
+    /// <summary>
+    /// Android density matching the host window's DPI scaling, so mirrored content keeps its logical size
+    /// (e.g. a 250% display yields 240 dpi). scrcpy's flex display is sized in physical pixels.
+    /// </summary>
+    private int GetDisplayDpi()
+    {
+        var scale = HostArea.XamlRoot?.RasterizationScale ?? 1.0;
+        return (int)Math.Round(Math.Clamp(96 * scale, 96, 480));
     }
 
     /// <summary>Host area bounds in physical pixels, relative to the window client area.</summary>

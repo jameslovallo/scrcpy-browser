@@ -1,0 +1,99 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Rebuild (clean + Debug + Release)",
+            "detail": "Cleans both configurations, then builds the app from source in Debug and Release.",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Clean (Debug)",
+                "Clean (Release)",
+                "Build (Debug)",
+                "Build (Release)"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build (Debug)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/ScrcpyLauncher/ScrcpyLauncher.csproj",
+                "-c",
+                "Debug",
+                "-p:Platform=x64",
+                "-v:m",
+                "-nologo"
+            ],
+            "problemMatcher": "$msbuild",
+            "group": "build"
+        },
+        {
+            "label": "Build (Release)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/ScrcpyLauncher/ScrcpyLauncher.csproj",
+                "-c",
+                "Release",
+                "-p:Platform=x64",
+                "-v:m",
+                "-nologo"
+            ],
+            "problemMatcher": "$msbuild",
+            "group": "build"
+        },
+        {
+            "label": "Clean (Debug)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "clean",
+                "${workspaceFolder}/src/ScrcpyLauncher/ScrcpyLauncher.csproj",
+                "-c",
+                "Debug",
+                "-p:Platform=x64",
+                "-v:m",
+                "-nologo"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean (Release)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "clean",
+                "${workspaceFolder}/src/ScrcpyLauncher/ScrcpyLauncher.csproj",
+                "-c",
+                "Release",
+                "-p:Platform=x64",
+                "-v:m",
+                "-nologo"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Publish (portable win-x64)",
+            "detail": "Runs publish.ps1: self-contained Release build into dist/win-x64.",
+            "type": "process",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/publish.ps1",
+                "-Runtime",
+                "win-x64"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
