@@ -16,6 +16,8 @@ internal static class NativeMethods
     public const long WS_SYSMENU = 0x00080000L;
     public const long WS_MINIMIZEBOX = 0x00020000L;
     public const long WS_MAXIMIZEBOX = 0x00010000L;
+    public const long WS_EX_CLIENTEDGE = 0x00000200L;
+    public const long WS_EX_WINDOWEDGE = 0x00000100L;
     public const long WS_EX_APPWINDOW = 0x00040000L;
 
     public const int SW_HIDE = 0;
@@ -32,7 +34,9 @@ internal static class NativeMethods
     public const uint WM_CLOSE = 0x0010;
 
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    public const int DWMWA_BORDER_COLOR = 34;
     public const int DWMWCP_ROUND = 2;
+    public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 

@@ -13,11 +13,17 @@ internal static class WindowEmbedder
         SetWindowLongPtr(child, GWL_STYLE, new IntPtr(style));
 
         var exStyle = GetWindowLongPtr(child, GWL_EXSTYLE).ToInt64();
-        SetWindowLongPtr(child, GWL_EXSTYLE, new IntPtr(exStyle & ~WS_EX_APPWINDOW));
+        SetWindowLongPtr(child, GWL_EXSTYLE, new IntPtr(exStyle & ~(WS_EX_APPWINDOW | WS_EX_CLIENTEDGE | WS_EX_WINDOWEDGE)));
 
         SetWindowLongPtr(child, GWLP_HWNDPARENT, owner);
         SetWindowPos(child, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-        DwmRoundedCorners[child] = TryEnableDwmRoundedCorners(child);
+        var useDwmCorners = TryEnableDwmRoundedCorners(child);
+        DwmRoundedCorners[child] = useDwmCorners;
+        if (useDwmCorners)
+        {
+            var borderColor = DWMWA_COLOR_NONE;
+            DwmSetWindowAttribute(child, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+        }
     }
 
     /// <summary>Moves/sizes the owned window over the host-client rectangle.</summary>
